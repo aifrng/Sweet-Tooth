@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sweet Tooth Rush | 2D Adventure</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=swap');
+        body { margin: 0; background: #4a6741; overflow: hidden; font-family: 'Montserrat', sans-serif; cursor: none; }
+        
+        #gameCanvas { 
+            display: block; 
+            background: #fff9c4; /* Conti's Yellow */
+            border: 8px solid #3a5233;
+            box-shadow: inset 0 0 100px rgba(74, 103, 65, 0.2);
+        }
+
+        .game-ui {
+            position: absolute;
+            top: 40px;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            pointer-events: none;
+            color: #4a6741;
+        }
+
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(74, 103, 65, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            z-index: 50;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-ui">
+        <div class="text-2xl tracking-tighter uppercase">Score: <span id="score">0</span></div>
+        <div class="text-2xl tracking-tighter uppercase">Level: <span id="level">1</span></div>
+    </div>
+
+    <div id="screen" class="overlay">
+    <h1 class="text-6xl mb-4 text-yellow-300">SWEET RUSH</h1>
+
+    <p class="mb-8 opacity-80 uppercase tracking-widest">
+        Catch the pastries. Avoid the burnt coals.
+    </p>
+
+    <button onclick="startGame()" 
+        class="bg-yellow-400 text-[#4a6741] px-10 py-4 rounded-full font-black text-xl hover:scale-110 transition">
+        START BAKING
+    </button>
+
+    <!-- ✅ PUT IT RIGHT HERE -->
+    <a href="index.html" class="mt-4 text-white underline opacity-70 block">
+        ← Back to Home
+    </a>
+</div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreEl = document.getElementById("score");
+        const levelEl = document.getElementById("level");
+        const screen = document.getElementById("screen");
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let gameActive = false;
+        let score = 0;
+        let level = 1;
+        let objects = [];
+        let particles = [];
+
+        const basket = {
+            x: canvas.width / 2,
+            y: canvas.height - 120,
+            width: 120,
+            height: 15,
+            color: "#4a6741"
+        };
+
+        const types = [
+            { emoji: "🍰", points: 10, speedMult: 1, type: 'good' },
+            { emoji: "🍩", points: 15, speedMult: 1.2, type: 'good' },
+            { emoji: "🍪", points: 5, speedMult: 0.8, type: 'good' },
+            { emoji: "🧁", points: 20, speedMult: 1.5, type: 'good' },
+            { emoji: "💣", points: 0, speedMult: 1.1, type: 'bad' } // Avoid the bomb!
+        ];
+
+        window.addEventListener("mousemove", (e) => {
+            basket.x = e.clientX - basket.width / 2;
+        });
+
+        function createParticle(x, y) {
+            for(let i=0; i<8; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: (Math.random() - 0.5) * 10,
+                    life: 1.0,
+                    color: "#4a6741"
+                });
+            }
+        }
+
+        function spawn() {
+            if (!gameActive) return;
+            const t = types[Math.floor(Math.random() * types.length)];
+            objects.push({
+                x: Math.random() * (canvas.width - 50),
+                y: -50,
+                ...t,
+                vy: (Math.random() * 3 + 2) * (1 + level * 0.1)
+            });
+            setTimeout(spawn, Math.max(200, 800 - (level * 50)));
+        }
+
+        function update() {
+            if (!gameActive) return;
+
+            // Update Level
+            level = Math.floor(score / 100) + 1;
+            levelEl.innerText = level;
+
+            for (let i = objects.length - 1; i >= 0; i--) {
+                let o = objects[i];
+                o.y += o.vy;
+
+                // Catch detection
+                if (o.y + 20 > basket.y && o.x > basket.x && o.x < basket.x + basket.width) {
+                    if (o.type === 'bad') {
+                        gameOver();
+                    } else {
+                        score += o.points;
+                        scoreEl.innerText = score;
+                        createParticle(o.x + 20, o.y);
+                        objects.splice(i, 1);
+                    }
+                    continue;
+                }
+
+                // Miss detection
+                if (o.y > canvas.height) {
+                    if (o.type === 'good') gameOver();
+                    objects.splice(i, 1);
+                }
+            }
+
+            // Particles logic
+            particles.forEach((p, i) => {
+                p.x += p.vx; p.y += p.vy; p.life -= 0.02;
+                if(p.life <= 0) particles.splice(i, 1);
+            });
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Basket (The Plate)
+            ctx.fillStyle = basket.color;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = "rgba(0,0,0,0.2)";
+            ctx.beginPath();
+            ctx.roundRect(basket.x, basket.y, basket.width, basket.height, 20);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Draw Objects
+            ctx.font = "40px Arial";
+            objects.forEach(o => {
+                ctx.fillText(o.emoji, o.x, o.y);
+            });
+
+            // Draw Particles
+            particles.forEach(p => {
+                ctx.globalAlpha = p.life;
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, 4, 4);
+            });
+            ctx.globalAlpha = 1;
+
+            update();
+            if (gameActive) requestAnimationFrame(draw);
+        }
+
+        function startGame() {
+            gameActive = true;
+            score = 0;
+            level = 1;
+            objects = [];
+            scoreEl.innerText = "0";
+            screen.style.display = "none";
+            spawn();
+            draw();
+        }
+
+        function gameOver() {
+            gameActive = false;
+            screen.style.display = "flex";
+            screen.querySelector('h1').innerText = "BAKERY CLOSED!";
+            screen.querySelector('h1').style.color = "#ff4d4d";
+            screen.querySelector('p').innerText = "FINAL SCORE: " + score;
+            screen.querySelector('button').innerText = "TRY AGAIN";
+        }
+    </script>
+</body>
+</html>
